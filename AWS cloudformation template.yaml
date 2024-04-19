@@ -1,0 +1,142 @@
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  ElectionAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: ElectionAPI
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /candidates/{id}:
+            get:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetCandidate.Arn}/invocations
+              responses: {}
+            delete:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteCandidate.Arn}/invocations
+              responses: {}
+          /candidates:
+            put:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateCandidate.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
+      Cors:
+        MaxAge: 5
+  GetCandidate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: GetCandidate
+      CodeUri: src/Function
+      Handler: com.shakil.aws.CandidateLambdaHandler::handleRequest
+      Runtime: java21
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        ElectionAPIGETcandidatesid:
+          Type: Api
+          Properties:
+            Path: /candidates/{id}
+            Method: GET
+            RestApiId: !Ref ElectionAPI
+      Environment:
+        Variables:
+          CANDIDATES_TABLE_NAME: !Ref Candidates
+          CANDIDATES_TABLE_ARN: !GetAtt Candidates.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Candidates
+  GetCandidateLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GetCandidate}
+  UpdateCandidate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: UpdateCandidate
+      CodeUri: src/Function2
+      Handler: com.shakil.aws.CandidateLambdaHandler::handlePutRequest
+      Runtime: java21
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        ElectionAPIPUTcandidates:
+          Type: Api
+          Properties:
+            Path: /candidates
+            Method: PUT
+            RestApiId: !Ref ElectionAPI
+      Environment:
+        Variables:
+          CANDIDATES_TABLE_NAME: !Ref Candidates
+          CANDIDATES_TABLE_ARN: !GetAtt Candidates.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Candidates
+  UpdateCandidateLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UpdateCandidate}
+  DeleteCandidate:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: DeleteCandidate
+      CodeUri: src/Function3
+      Handler: com.shakil.aws.CandidateLambdaHandler::handleDeleteRequest
+      Runtime: java21
+      MemorySize: 3008
+      Timeout: 30
+      Tracing: Active
+      Events:
+        ElectionAPIDELETEcandidatesid:
+          Type: Api
+          Properties:
+            Path: /candidates/{id}
+            Method: DELETE
+            RestApiId: !Ref ElectionAPI
+      Environment:
+        Variables:
+          CANDIDATES_TABLE_NAME: !Ref Candidates
+          CANDIDATES_TABLE_ARN: !GetAtt Candidates.Arn
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Candidates
+  DeleteCandidateLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DeleteCandidate}
+  Candidates:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: 'N'
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
